@@ -11,6 +11,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 
+import java.util.Arrays;
+
 public class Main {
 	public static void main(String[] args) {
 		System.out.println("Hello world!");
@@ -30,8 +32,9 @@ public class Main {
 							ChannelPipeline p = ch.pipeline();
 
 							// Gestionnaire de canaux pour le client
-							p.addLast();
-							p.addLast(new ClientChannelHandler("localhost", 25566)); // Adresse et port du serveur Minecraft
+							//p.addLast();
+							//p.addLast(new PlayerChannelHandler("localhost", 25565));
+							p.addLast(new ClientChannelHandler("localhost", 25565)); // Adresse et port du serveur Minecraft
 						}
 					});
 
@@ -45,6 +48,52 @@ public class Main {
 			workerGroup.shutdownGracefully();
 		}
 	}
+
+
+	/*public static void decodeMinecraftPacket(ByteBuf byteBuf) {
+		// Lire la taille du paquet (VarInt)
+		int packetSize = 0;//readVarInt(byteBuf);
+
+		// Lire l'identifiant du paquet (VarInt)
+		int packetId = Utils.readVarInt(byteBuf);
+
+		// Traiter les données spécifiques au paquet en fonction de son identifiant
+		switch (packetId) {
+			case 0x01:  // Exemple : Paquet de Ping
+				long pingTime = byteBuf.readLong();
+				System.out.println("Paquet de Ping - Temps : " + pingTime);
+				break;
+
+			case 0x0F:  // Exemple : Paquet de Chat
+				String chatMessage = Utils.readString(byteBuf);
+				System.out.println("Paquet de Chat - Message : " + chatMessage);
+				break;
+
+			case 0x12:  // Exemple : Paquet de Mouvement du Joueur
+				double deltaX = byteBuf.readDouble();
+				double deltaY = byteBuf.readDouble();
+				double deltaZ = byteBuf.readDouble();
+				float deltaYaw = byteBuf.readFloat();
+				float deltaPitch = byteBuf.readFloat();
+				boolean onGround = byteBuf.readBoolean();
+
+				System.out.println("Paquet de Mouvement du Joueur - DeltaX : " + deltaX +
+						", DeltaY : " + deltaY +
+						", DeltaZ : " + deltaZ +
+						", DeltaYaw : " + deltaYaw +
+						", DeltaPitch : " + deltaPitch +
+						", On Ground : " + onGround);
+				break;
+
+			// Ajoutez des cas pour d'autres types de paquets selon votre besoin
+			case 48:
+				System.out.println("Open book : ");
+				break;
+
+			default:
+				System.out.println("Paquet non pris en charge avec l'identifiant : " + packetId + " taille : " + packetSize);
+		}
+	}*/
 
 	private static class ClientChannelHandler extends ChannelHandlerAdapter {
 
@@ -86,45 +135,34 @@ public class Main {
 		@Override
 		public void channelRead(ChannelHandlerContext ctx, Object msg) {
 			if (serverChannel != null && serverChannel.isActive()) {
-				// Intercepter le paquet de ping
+
 				if (msg instanceof ByteBuf) {
-					ByteBuf buffer = ( (ByteBuf) msg ).copy();
+					ByteBuf byteBuf = (ByteBuf) msg;
+					int readerIndex = byteBuf.readerIndex();
 
-					// Lire l'ID du paquet
-					//int packetId = buffer.readByte();
-					String chaine = readString(buffer);
+					int packetId = Utils.readVarInt(byteBuf);
 
+					//byteBuf.readerIndex(readerIndex);
 
-					// Votre logique en fonction de l'ID du paquet
-					//System.out.printf("ID du paquet : %d (%s)\n", packetId, Integer.toHexString(packetId));
-					System.out.println(chaine);
+					switch (packetId) {
+						case 16 -> {
+							int protocol = Utils.readVarInt(byteBuf);
+							String data = Utils.readString(byteBuf, packetId);
+							System.out.println(packetId + "---" + protocol + "---" + data);
+						}
+						default -> {
+							String data = Utils.readString(byteBuf, packetId);
 
-					// Le reste de votre logique pour traiter le paquet...
+							System.out.println("Client -> Serveur (" + packetId + ") : " + data);
+						}
+					}
 
-					buffer.release();
-				}
-				else {
-					System.out.println("test");
+					byteBuf.readerIndex(readerIndex);
 				}
 
 				// Envoyer le paquet au serveur Minecraft sans modification
 				serverChannel.writeAndFlush(msg);
 			}
-		}
-
-		// Fonction pour lire une chaîne depuis le buffer
-		private String readString(ByteBuf buffer) {
-			int length = buffer.readShort();
-			byte[] bytes = new byte[length];
-			buffer.readBytes(bytes);
-			return new String(bytes);
-		}
-
-		// Fonction pour écrire une chaîne dans le buffer
-		private void writeString(ByteBuf buffer, String string) {
-			byte[] bytes = string.getBytes();
-			buffer.writeShort(bytes.length);
-			buffer.writeBytes(bytes);
 		}
 
 		@Override
@@ -135,7 +173,7 @@ public class Main {
 		}
 	}
 
-	private static class ServerChannelHandler extends ChannelHandlerAdapter {
+	public static class ServerChannelHandler extends ChannelHandlerAdapter {
 
 		private final Channel clientChannel;
 
@@ -145,23 +183,43 @@ public class Main {
 
 		@Override
 		public void channelRead(ChannelHandlerContext ctx, Object msg) {
+
+			if (msg instanceof ByteBuf) {
+				ByteBuf byteBuf = (ByteBuf) msg;
+				int readerIndex = byteBuf.readerIndex();
+
+				//short first = byteBuf.readUnsignedByte();
+
+				//byteBuf.readerIndex(readerIndex);
+
+				int size = Utils.readVarInt(byteBuf);
+				int packetId = 0;//Utils.readVarInt(byteBuf);
+
+				//byteBuf.readerIndex(readerIndex);
+
+				if (packetId == 0) {
+					String data = Utils.readString(byteBuf, size);
+
+					System.out.println("Serveur -> Client (" + size + ", " + packetId + /*", " + first + */") : " + data);
+				} else {
+					System.out.println("Serveur -> Client (" + size + ", " + packetId + /*", " + first + */")");
+				}
+
+				/*byteBuf.readerIndex(readerIndex);
+
+				if (size == 119)
+				{
+					System.out.println(Utils.readString(byteBuf));
+
+				}*/
+
+				byteBuf.readerIndex(readerIndex);
+
+				//byteBuf.release();
+			}
+
 			// Envoyer la réponse du serveur Minecraft au client
 			clientChannel.writeAndFlush(msg);
-		}
-
-		// Fonction pour lire une chaîne depuis le buffer
-		private String readString(ByteBuf buffer) {
-			int length = buffer.readShort();
-			byte[] bytes = new byte[length];
-			buffer.readBytes(bytes);
-			return new String(bytes);
-		}
-
-		// Fonction pour écrire une chaîne dans le buffer
-		private void writeString(ByteBuf buffer, String string) {
-			byte[] bytes = string.getBytes();
-			buffer.writeShort(bytes.length);
-			buffer.writeBytes(bytes);
 		}
 
 		@Override
