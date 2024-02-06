@@ -8,10 +8,6 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
-
-import java.util.Arrays;
 
 public class Main {
 	public static void main(String[] args) {
@@ -24,17 +20,22 @@ public class Main {
 			ServerBootstrap serverBootstrap = new ServerBootstrap();
 			serverBootstrap.group(bossGroup, workerGroup)
 					.channel(NioServerSocketChannel.class)
+
+					.option(ChannelOption.SO_REUSEADDR, true)
+					.option(ChannelOption.SO_BACKLOG, 128)
+					.option(ChannelOption.SO_KEEPALIVE, true)
+
 					.childOption(ChannelOption.TCP_NODELAY, true)
-					.childOption(ChannelOption.IP_TOS, 0x18)
+					.childOption(ChannelOption.SO_KEEPALIVE, true)
+					.childOption(ChannelOption.SO_LINGER, 0)
+
 					.childHandler(new ChannelInitializer<SocketChannel>() {
 						@Override
 						public void initChannel(SocketChannel ch) {
 							ChannelPipeline p = ch.pipeline();
 
 							// Gestionnaire de canaux pour le client
-							//p.addLast();
-							//p.addLast(new PlayerChannelHandler("localhost", 25565));
-							p.addLast(new ClientChannelHandler("localhost", 25565)); // Adresse et port du serveur Minecraft
+							p.addLast(new ClientChannelHandler("localhost", 25565, ch)); // Adresse et port du serveur Minecraft
 						}
 					});
 
@@ -100,10 +101,12 @@ public class Main {
 		private final String serverHost;
 		private final int serverPort;
 		private Channel serverChannel;
+		private SocketChannel ch;
 
-		public ClientChannelHandler(String serverHost, int serverPort) {
+		public ClientChannelHandler(String serverHost, int serverPort, SocketChannel ch) {
 			this.serverHost = serverHost;
 			this.serverPort = serverPort;
+			this.ch = ch;
 		}
 
 		@Override
@@ -144,7 +147,18 @@ public class Main {
 
 					//byteBuf.readerIndex(readerIndex);
 
-					switch (packetId) {
+					System.out.println("Client -> Serveur (" + packetId + ") : ");
+
+					if (packetId == 9)
+					{
+						byteBuf.readerIndex(readerIndex);
+
+						this.ch.writeAndFlush(msg);
+
+						return;
+					}
+
+					/*switch (packetId) {
 						case 16 -> {
 							int protocol = Utils.readVarInt(byteBuf);
 							String data = Utils.readString(byteBuf, packetId);
@@ -155,7 +169,7 @@ public class Main {
 
 							System.out.println("Client -> Serveur (" + packetId + ") : " + data);
 						}
-					}
+					}*/
 
 					byteBuf.readerIndex(readerIndex);
 				}
@@ -197,13 +211,15 @@ public class Main {
 
 				//byteBuf.readerIndex(readerIndex);
 
-				if (packetId == 0) {
+				System.out.println("Client -> Serveur (" + size + ") : ");
+
+				/*if (packetId == 0) {
 					String data = Utils.readString(byteBuf, size);
 
-					System.out.println("Serveur -> Client (" + size + ", " + packetId + /*", " + first + */") : " + data);
+					System.out.println("Serveur -> Client (" + size + ", " + packetId + ") : " + data);
 				} else {
-					System.out.println("Serveur -> Client (" + size + ", " + packetId + /*", " + first + */")");
-				}
+					System.out.println("Serveur -> Client (" + size + ", " + packetId + ")");
+				}*/
 
 				/*byteBuf.readerIndex(readerIndex);
 
